@@ -1,0 +1,372 @@
+<!doctype html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+<script>
+var cname = [
+  'red',
+  'green',
+  'blue',
+  'yellow'
+];
+
+function createTable(width, height) {
+	$('#resolve').html('<a href="#" id="resolve">Resolve</a>');
+	var table = document.getElementById("limits");
+	table.innerHTML = "";
+	for (var c = 0; c < cname.length; c++) {
+		var row = table.insertRow(-1);
+		var cell = row.insertCell(-1);
+		var input = document.createElement('input');
+		input.id = 'color' + c;
+		cell.appendChild(input);
+		cell = row.insertCell(0);
+		cell.style.backgroundColor = cname[c];
+		cell.style.width = "40px";
+	}
+	document.getElementById('solutions').innerHTML = '';
+
+	table = document.getElementById("game");
+	table.width = width;
+	table.height = height;
+	table.innerHTML = "";
+	table.cells = [];
+
+	table.walk = function(col, row, callback) {
+		var visited = [];
+		var toVisit = [ this.cells[row][col] ];
+		
+		while(toVisit.length > 0) {
+			var cell = toVisit.pop();
+			if (visited.indexOf(cell) !== -1) continue;
+
+			visited.push(cell);
+			if ($.isFunction(callback)) callback(cell);
+
+			for (var i = 0; i < cell.connected.length; ++i) {
+				toVisit.push(cell.connected[i]);
+			}
+		}
+	};
+
+	table.setCellColor = function(cell, color) {
+		if (color === undefined) {
+			var c = cname.indexOf(cell.style.backgroundColor);
+			if (c == cname.length-1) {
+				color = "";
+			} else {
+				color = cname[c+1];
+			}
+		}
+		cell.style.backgroundColor = color;
+	};
+
+	var row = document.createElement('div');
+	row.className = 'divBorderRow';
+	table.appendChild(row);
+	for (var c=0; c<table.width; c++) {
+		var cell = document.createElement('div');
+		cell.className = 'divBorderCell';
+		row.appendChild(cell);
+	}
+	for (var i=0; i<table.height; i++) {
+		table.cells[i] = [];
+		var row = document.createElement('div');
+		row.className = 'divRow';
+		table.appendChild(row);
+		var cell = document.createElement('div');
+		cell.className = 'divBorderCell';
+		row.appendChild(cell);
+		var borderRow = document.createElement('div');
+		borderRow.className = 'divBorderRow';
+		table.appendChild(borderRow);
+		for (var j=0; j<table.width; j++) {
+			var cell = document.createElement('div');
+			cell.className='divCell';
+			row.appendChild(cell);
+			cell.row = i;
+			cell.col = j;
+			cell.connected = [];
+			table.cells[i][j] = cell;
+			var borderCell = document.createElement('div');
+			borderCell.className='divBorderCell';
+			if (j < table.width-1) {
+				borderCell.className += ' clickable';
+				borderCell.cells = [ {'col': j, 'row': i}, {'col': j+1, 'row': i} ];
+			}
+			row.appendChild(borderCell);
+			var borderRowCell = document.createElement('div');
+			borderRowCell.className = 'divBorderCell';
+			if (i < table.height-1) {
+				borderRowCell.className += ' clickable';
+				borderRowCell.cells = [ {'col': j, 'row': i}, {'col': j, 'row': i+1} ];
+			}
+			borderRow.appendChild(borderRowCell);
+			
+		}
+	}
+}
+
+(function() {
+
+if (!Array.prototype.indexOf) {
+  Array.prototype.indexOf = function (obj, fromIndex) {
+    if (fromIndex === undefined) {
+        fromIndex = 0;
+    } else if (fromIndex < 0) {
+        fromIndex = Math.max(0, this.length + fromIndex);
+    }
+    for (var i = fromIndex, j = this.length; i < j; i++) {
+        if (this[i] === obj)
+            return i;
+    }
+    return -1;
+  };
+}
+
+if (!String.prototype.trim) {
+  String.prototype.trim=function(){return this.replace(/^\s+|\s+$/g, '');};
+}
+
+
+})();
+
+$(document).ready(function() {
+	$('body').delegate('.divBorderCell.clickable', 'click', function() {
+		$(this).toggleClass('invisible');
+
+		var table = document.getElementById("game");
+		var l = table.cells[this.cells[0].row][this.cells[0].col];
+		var r = table.cells[this.cells[1].row][this.cells[1].col];
+		var l_ind, r_ind;
+
+		if ((l_ind = l.connected.indexOf(r)) !== -1) {
+			r_ind = r.connected.indexOf(l);
+			l.connected.splice(l_ind, 1);
+			r.connected.splice(r_ind, 1);
+		} else {
+			l.connected.push(r);
+			r.connected.push(l);
+		}
+
+		table.walk(this.cells[0].col, this.cells[0].row, function(cell) { return table.setCellColor(cell, 'white'); });
+		table.walk(this.cells[1].col, this.cells[1].row, function(cell) { return table.setCellColor(cell, 'white'); });
+
+	}).delegate('.divCell', 'click', function() {
+		var table = document.getElementById("game");
+		table.walk(this.col, this.row, table.setCellColor);
+	}).delegate('#resolve', 'click', function() {
+		var table = document.getElementById('game');
+		// Заполняем ограничения по количеству цветов
+		table.limits = [];
+		for (var c = 0; c < cname.length; c++) {
+			var color = document.getElementById('color' + c);
+			if (isNaN(table.limits[c] = parseInt(color.value))) {
+				table.limits[c] = undefined;
+				color.value = "";
+            } else {
+                color.value = table.limits[c];
+            }
+		}
+
+		// создаем блоки
+		var blocksCount = 0;
+		for (var row = 0; row < table.height; row++) {
+			for (var col = 0; col < table.width; col++) {
+				var cell = table.cells[row][col];
+				if (cell.blockNum === undefined) {
+					table.walk(col, row, function(cell) { cell.blockNum = blocksCount; });
+					blocksCount++;
+				}
+			}
+		}
+
+		table.colors = [];
+		table.matrix = [];
+
+		// заполняем матрицу смежностей блоков
+		for (var row = 0; row < table.height; row++) {
+			for (var col = 0; col < table.width; col++) {
+				var updateMatrix = function(s, d) {
+					if (s === d) return;
+					if (table.matrix[s] === undefined) table.matrix[s] = [];
+					if (table.matrix[d] === undefined) table.matrix[d] = [];
+					table.matrix[s][d] = table.matrix[d][s] = 1;
+				}
+				var cell = table.cells[row][col];
+				if (row < table.height-1) {
+					updateMatrix(cell.blockNum, table.cells[row+1][col].blockNum);
+				}
+				if (col < table.width-1) {
+					updateMatrix(cell.blockNum, table.cells[row][col+1].blockNum);
+				}
+				table.colors[cell.blockNum] = cname.indexOf(cell.style.backgroundColor);
+				if (table.colors[cell.blockNum] === -1) table.colors[cell.blockNum] = undefined;
+			}
+		}
+
+		var try_colorize = function(solutions, node, colors, matrix, limits, MAX_COLORS) {
+		  if (MAX_COLORS === undefined) {
+		  	MAX_COLORS = cname.length;
+		  }
+		  // если дошли до конца — все хорошо
+		  if (node >= matrix.length) {
+		  	solutions.push(colors.slice());
+			return true;
+		  }
+		  // если цвет фиксирован — ничего не можем поделать
+		  if (colors[node] !== undefined) {
+		  	if (colors[node] < MAX_COLORS) {
+				return try_colorize(solutions, node+1, colors, matrix, limits, MAX_COLORS);
+			} else {
+				return false;
+			}
+		  }
+
+		  for (var c = 0; c < MAX_COLORS; ++c) {
+			// проверить смежные ноды на наличие цвета
+			var valid = true;
+			for (var i = 0; i < matrix[node].length; ++i) {
+				if (matrix[node][i] !== undefined) {
+					valid &= c != colors[i];
+				}
+			}
+			if (!valid) {
+				// цвет используется соседями
+				continue;
+			}
+			if (limits[c] !== undefined) {
+		  		// если можно использовать цвет c
+				if (limits[c] == 0) {
+					continue;
+				}
+				// уменьшить лимит на цвет c
+				limits[c]--;
+			}
+			// покрасить текущую ноду в цвет c
+			colors[node] = c;
+
+			// пытаемся покрасить следующие ноды, то все хорошо
+			try_colorize(solutions, node+1, colors, matrix, limits, MAX_COLORS);
+
+			// снимаем покраску с текущей ноды
+			colors[node] = undefined;
+			// увеличить лимит на цвет c
+			if (limits[c] !== undefined) {
+				limits[c]++;
+			}
+		  }
+		  // все цвета перебрали — вернуть ошибку
+		  return false;
+		}
+
+		table.solutions = [table.colors.slice()];
+		try_colorize(table.solutions, 0, table.colors, table.matrix, table.limits, 2);
+		var preamble;
+		if (table.solutions.length > 1) {
+			preamble = 'Puzzle has ' + (table.solutions.length-1) + ' solutions with 2 colors. Seriously?';
+		} else {
+			try_colorize(table.solutions, 0, table.colors, table.matrix, table.limits, 3);
+			var sc3 = table.solutions.length-1;
+			try_colorize(table.solutions, 0, table.colors, table.matrix, table.limits, 4);
+			var sc4 = table.solutions.length-sc3-1;
+
+			if (sc3 > 0) {
+				preamble = 'There are ' + sc3 + ' solutions with 3 colors and ' + sc4 + ' solutions with 4 colors';
+			} else {
+				if (sc4 > 0) {
+					preamble = 'There are only 4 color ' + sc4 + ' solutions';
+				} else {
+					preamble = 'There are no solutions';
+				}
+			}
+		}
+		var options = "";
+		for (var s = 1; s < table.solutions.length; s++) {
+			options += '<option value="' + s + '">Solution ' + s + '</option>';
+		}
+		$('#solutions').html(preamble + '<br/><select><option value="0" selected="selected">Original</option>' + options + '</select>');
+
+		return false;
+	}).delegate('#clear', 'click', function() {
+		var cols = Math.floor($('#cols').val());
+		var rows = Math.floor($('#rows').val());
+		createTable(cols, rows);
+	}).delegate('#solutions select', 'change', function() {
+		var table = document.getElementById('game');
+		var solution = table.solutions[Math.floor($(this).val())];
+		for (var row = 0; row < table.height; row++) {
+			for (var col = 0; col < table.width; col++) {
+				var cell = table.cells[row][col];
+				table.setCellColor(cell, solution[cell.blockNum]===undefined?"white":cname[solution[cell.blockNum]]);
+			}
+		}
+		
+	});
+});
+
+</script>
+<style>
+.divTable{
+}
+.divRow, .divBorderRow {
+  clear:both;
+}
+.divRow .divCell {
+  float:left;/*fix for  buggy browsers*/
+  width: 40px;
+  height: 40px;
+  background-color: white;
+  padding: 5px;
+  margin: -5px;
+}
+.divRow .divBorderCell {
+  float: left;
+  width: 5px;
+  height: 40px;
+  background: #996633;
+  padding: 5px 0 5px 0;
+  margin: -5px 0 -5px 0;
+  position: relative;
+  z-index: 1;
+}
+.divBorderRow .divBorderCell {
+  float: left;
+  width: 40px;
+  height: 5px;
+  background: #996633;
+  position: relative;
+  padding-right: 5px;
+  z-index: 1;
+}
+.divBorderCell.clickable:hover, .invisible.clickable:hover {
+  background: blue !important;
+}
+.invisible {
+  background: none !important;
+}
+</style>
+</head>
+<body>
+	<div>
+		<table>
+			<tr><td>cols:</td><td><input id="cols" value="2"/></td><td rowspan="2"><a href="#" id="clear">Create</a></td></tr>
+			<tr><td>rows:</td><td><input id="rows" value="2"/></td></tr>
+		</table>
+	</div>
+	<div style="clear:both"/>
+	<div id="game"></div>
+	<div style="clear:both" />
+	<div>
+		<table id="limits">
+		</table>
+	</div>
+	<div style="clear:both" />
+	<div id="resolve">
+	</div>
+	<div style="clear:both" />
+	<div id="solutions">
+	</div>
+</body>
+</html>
